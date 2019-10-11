@@ -104,25 +104,48 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
             self.infoView.layer.sublayers?.forEach { $0.removeFromSuperlayer() }
             
             for ob in observations {
-                // Fill the detected area
-                let layer = self.drawFrame(observation: ob, frame: frame)
-                self.infoView.layer.addSublayer(layer)
                 
-                // Draw the bounding box
-                let rect = self.scaleBoundingBox(boundingBox: ob.boundingBox, targetFrame: frame)
-                let borderLayer = CALayer()
-                borderLayer.frame = rect
-                borderLayer.borderColor = UIColor.red.cgColor
-                borderLayer.borderWidth = 5
-                self.infoView.layer.addSublayer(borderLayer)
-                
-                // show the dected area to an UIImage for preview
-                guard let capteredBuffer = self.capteredBuffer else { return }
-                let cgImage = self.cgImageFromSampleBuffer(capteredBuffer)
-                let rect2 = self.rotateAndScaleBoundingBox(boundingBox: ob.boundingBox, cgImage: cgImage)
-                guard let coppedImage = cgImage.cropping(to: rect2) else { return }
-                let image = UIImage(cgImage: coppedImage, scale: 1, orientation: .right)
-                self.previewImageView.image = image
+                if (ob.confidence == 1) {
+                    // Fill the detected area
+                    let layer = self.drawFrame(observation: ob, frame: frame)
+                    self.infoView.layer.addSublayer(layer)
+                    
+                    // Draw the bounding box
+                    let rect = self.scaleBoundingBox(boundingBox: ob.boundingBox, targetFrame: frame)
+                    let borderLayer = CALayer()
+                    borderLayer.frame = rect
+                    borderLayer.borderColor = UIColor.red.cgColor
+                    borderLayer.borderWidth = 5
+                    self.infoView.layer.addSublayer(borderLayer)
+                    
+                    // Crop the dected area
+                    guard let capteredBuffer = self.capteredBuffer else { break }
+                    let ciImage = CIImage(cvPixelBuffer: capteredBuffer)
+                        .oriented(forExifOrientation: Int32(CGImagePropertyOrientation.right.rawValue))
+                    let imageSize = ciImage.extent.size
+                    let boundingBox = ob.boundingBox.scaled(to: imageSize)
+                    let topLeft = ob.topLeft.scaled(to: imageSize)
+                    let topRight = ob.topRight.scaled(to: imageSize)
+                    let bottomLeft = ob.bottomLeft.scaled(to: imageSize)
+                    let bottomRight = ob.bottomRight.scaled(to: imageSize)
+                    let correctedImage = ciImage
+                        .cropped(to: boundingBox)
+                        .applyingFilter("CIPerspectiveCorrection", parameters: [
+                            "inputTopLeft": CIVector(cgPoint: topLeft),
+                            "inputTopRight": CIVector(cgPoint: topRight),
+                            "inputBottomLeft": CIVector(cgPoint: bottomLeft),
+                            "inputBottomRight": CIVector(cgPoint: bottomRight)
+                        ])
+                        .applyingFilter("CIColorControls", parameters: [
+                            kCIInputSaturationKey: 0,
+                            kCIInputContrastKey: 32
+                        ])
+                        .applyingFilter("CIColorInvert")
+                    
+                    // Show the dected area for preview
+                    let image = UIImage(ciImage: correctedImage)
+                    self.previewImageView.image = image
+                }
             }
             
         }
@@ -143,30 +166,6 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         return rec
     }
     
-    // Converting CMSampleBuffer to a UIImage Object
-    private func cgImageFromSampleBuffer(_ pixelBuffer:CVImageBuffer) -> CGImage {
-                
-//        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-//            fatalError("Fail to get image buffer.")
-//        }
-        
-        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
-        let width = CVPixelBufferGetWidth(pixelBuffer)
-        let height = CVPixelBufferGetHeight(pixelBuffer)
-        let context = CGContext(
-            data: CVPixelBufferGetBaseAddress(pixelBuffer),
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer),
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)!
-        let cgImage = context.makeImage()!
-        CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
-                
-        return cgImage
-    }
-    
     // Scale boundingBox to target frame
     private func scaleBoundingBox(boundingBox:CGRect, targetFrame: CGRect) -> CGRect {
         let width = CGFloat(targetFrame.width)
@@ -176,17 +175,6 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
             y: height * (1 - boundingBox.origin.y - boundingBox.height),
             width: width * boundingBox.width,
             height: height * boundingBox.height)
-        return rect
-    }
-    
-    private func rotateAndScaleBoundingBox(boundingBox:CGRect, cgImage: CGImage) -> CGRect {
-        let width = CGFloat(cgImage.height)
-        let height = CGFloat(cgImage.width)
-        let rect = CGRect(
-            x: height * (1 - boundingBox.origin.y - boundingBox.height),
-            y: width * (1 - boundingBox.origin.x - boundingBox.width),
-            width: height * boundingBox.height,
-            height: width * boundingBox.width)
         return rect
     }
     
