@@ -68,6 +68,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     // AVCaptureVideoDataOutputSampleBufferDelegate
     public func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        
         self.capteredBuffer = pixelBuffer
 
         var requestOptions:[VNImageOption : Any] = [:]
@@ -102,11 +103,28 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
             // Remove all layers
             self.infoView.layer.sublayers?.forEach { $0.removeFromSuperlayer() }
             
-            // Draw the frames and add them to infoView
-            for ov in observations {
-                let layer = self.drawFrame(observation: ov, frame: frame)
+            for ob in observations {
+                // Fill the detected area
+                let layer = self.drawFrame(observation: ob, frame: frame)
                 self.infoView.layer.addSublayer(layer)
+                
+                // Draw the bounding box
+                let rect = self.scaleBoundingBox(boundingBox: ob.boundingBox, targetFrame: frame)
+                let borderLayer = CALayer()
+                borderLayer.frame = rect
+                borderLayer.borderColor = UIColor.red.cgColor
+                borderLayer.borderWidth = 5
+                self.infoView.layer.addSublayer(borderLayer)
+                
+                // show the dected area to an UIImage for preview
+                guard let capteredBuffer = self.capteredBuffer else { return }
+                let cgImage = self.cgImageFromSampleBuffer(capteredBuffer)
+                let rect2 = self.rotateAndScaleBoundingBox(boundingBox: ob.boundingBox, cgImage: cgImage)
+                guard let coppedImage = cgImage.cropping(to: rect2) else { return }
+                let image = UIImage(cgImage: coppedImage, scale: 1, orientation: .right)
+                self.previewImageView.image = image
             }
+            
         }
     }
     
@@ -120,15 +138,57 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         let rec = CAShapeLayer()
         rec.path = rectangle.cgPath
         rec.fillColor = UIColor.red.cgColor
+        rec.borderColor = UIColor.red.cgColor
         rec.opacity = 0.3
         return rec
     }
+    
+    // Converting CMSampleBuffer to a UIImage Object
+    private func cgImageFromSampleBuffer(_ pixelBuffer:CVImageBuffer) -> CGImage {
+                
+//        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+//            fatalError("Fail to get image buffer.")
+//        }
+        
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+        let context = CGContext(
+            data: CVPixelBufferGetBaseAddress(pixelBuffer),
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer),
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)!
+        let cgImage = context.makeImage()!
+        CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
+                
+        return cgImage
+    }
+    
+    // Scale boundingBox to target frame
+    private func scaleBoundingBox(boundingBox:CGRect, targetFrame: CGRect) -> CGRect {
+        let width = CGFloat(targetFrame.width)
+        let height = CGFloat(targetFrame.height)
+        let rect = CGRect(
+            x: width * boundingBox.origin.x,
+            y: height * (1 - boundingBox.origin.y - boundingBox.height),
+            width: width * boundingBox.width,
+            height: height * boundingBox.height)
+        return rect
+    }
+    
+    private func rotateAndScaleBoundingBox(boundingBox:CGRect, cgImage: CGImage) -> CGRect {
+        let width = CGFloat(cgImage.height)
+        let height = CGFloat(cgImage.width)
+        let rect = CGRect(
+            x: height * (1 - boundingBox.origin.y - boundingBox.height),
+            y: width * (1 - boundingBox.origin.x - boundingBox.width),
+            width: height * boundingBox.height,
+            height: width * boundingBox.width)
+        return rect
+    }
+    
 
-}
-
-extension CGPoint {
-   func scaled(to size: CGSize) -> CGPoint {
-       return CGPoint(x: self.x * size.width,
-                      y: self.y * size.height)
-   }
 }

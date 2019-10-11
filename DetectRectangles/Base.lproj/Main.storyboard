@@ -27,10 +27,10 @@
                                 <rect key="frame" x="0.0" y="80" width="414" height="736"/>
                             </view>
                             <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" translatesAutoresizingMaskIntoConstraints="NO" id="g9x-7B-gjh">
-                                <rect key="frame" x="284" y="732" width="130" height="130"/>
+                                <rect key="frame" x="256" y="705" width="158" height="157"/>
                                 <constraints>
-                                    <constraint firstAttribute="height" constant="130" id="eYx-M6-1BE"/>
-                                    <constraint firstAttribute="width" constant="130" id="qo8-Ga-sTh"/>
+                                    <constraint firstAttribute="height" constant="157" id="eYx-M6-1BE"/>
+                                    <constraint firstAttribute="width" constant="158" id="qo8-Ga-sTh"/>
                                 </constraints>
                             </imageView>
                         </subviews>
