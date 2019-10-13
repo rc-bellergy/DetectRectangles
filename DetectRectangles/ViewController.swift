@@ -14,6 +14,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     
     // MARK: - Properties
     
+    var cameraOrientation = CGImagePropertyOrientation.right
     var session = AVCaptureSession()
     var requests = [VNRequest]()
     var capteredBuffer:CVImageBuffer? // current captured video buffer
@@ -22,7 +23,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     
     var sessionPreset = AVCaptureSession.Preset.high // change the capture quality here
     var maximumObservations = 1 // Allows Vision algorithms to return the number of observations.
-    var minimumSize:Float = 0.1 // the minimum size of the rectangle to be detected (0 - 1)
+    var minimumSize:Float = 0.4 // the minimum size of the rectangle to be detected (0 - 1)
     
     // MARK - Outlets
     
@@ -75,7 +76,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         if let camData = CMGetAttachment(sampleBuffer, key: kCMSampleBufferAttachmentKey_CameraIntrinsicMatrix, attachmentModeOut: nil) {
             requestOptions = [.cameraIntrinsics:camData]
         }
-        let imageRequestHandler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: CGImagePropertyOrientation.right, options: requestOptions)
+        let imageRequestHandler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: cameraOrientation, options: requestOptions)
         
         do {
             try imageRequestHandler.perform(self.requests) // pass the analysis requests here
@@ -115,13 +116,13 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
                     let borderLayer = CALayer()
                     borderLayer.frame = rect
                     borderLayer.borderColor = UIColor.red.cgColor
-                    borderLayer.borderWidth = 5
+                    borderLayer.borderWidth = 2
                     self.infoView.layer.addSublayer(borderLayer)
                     
                     // Crop the dected area
                     guard let capteredBuffer = self.capteredBuffer else { break }
                     let ciImage = CIImage(cvPixelBuffer: capteredBuffer)
-                        .oriented(forExifOrientation: Int32(CGImagePropertyOrientation.right.rawValue))
+                        .oriented(forExifOrientation: Int32(self.cameraOrientation.rawValue))
                     let imageSize = ciImage.extent.size
                     let boundingBox = ob.boundingBox.scaled(to: imageSize)
                     let topLeft = ob.topLeft.scaled(to: imageSize)
